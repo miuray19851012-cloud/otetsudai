@@ -205,6 +205,10 @@ nav.tabs button[aria-selected="true"]{background:var(--sun);color:#fff}
 .modal p{margin:0 0 16px;color:var(--muted);white-space:pre-line}
 .modal .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .modal .acts button{padding:12px;border-radius:14px;font-weight:800}
+.modal .pins{display:grid;gap:8px;margin-bottom:4px}
+.modal .pin{width:100%;padding:12px;border-radius:14px;border:2px solid var(--line);background:var(--bg);text-align:center;font-size:24px;letter-spacing:.4em;font-weight:800}
+.modal .pin::placeholder{font-size:15px;letter-spacing:0;font-weight:500}
+.modal .pin-err{color:var(--bad);font-weight:800;min-height:1.4em;margin:6px 0 10px}
 .modal .no{background:var(--bg)}
 .modal .yes{background:var(--sun);color:#fff}
 .modal .yes.bad{background:var(--bad)}
@@ -620,6 +624,7 @@ $('#p-log').addEventListener('click', async e => {
   const ub = e.target.closest('[data-undo]');
   if (ub) {
     const l = state.log.find(x => x.id === ub.dataset.undo); if (!l) return;
+    if (!(await requireParent())) return;
     const ok = await confirmModal('↩️', 'とりけしますか？', `${kidOf(l.kid).name}：${l.label}\n${l.delta >= 0 ? '+' : ''}${l.delta}pt を もとに もどします`, 'とりけす', true);
     if (!ok) return;
     const id = l.id;
@@ -677,6 +682,12 @@ function renderParent() {
       <input id="adj-note" placeholder="りゆう（れい：おてつだい ボーナス）" style="grid-column:1/-1">
       <button class="btn2" style="background:var(--good)" data-adj="1">＋ たす</button>
       <button class="btn2" style="background:var(--bad)" data-adj="-1">− ひく</button>
+    </div>
+
+    <h2>🔒 あんしょうばんごう</h2>
+    <div class="card">
+      <div class="backup"><button data-act="change-pin" style="grid-column:1/-1">ばんごうを かえる</button></div>
+      <p class="hint">「おとな」タブと、きろくの とりけしに ひつようです。おとなタブを でると また ロックされます。</p>
     </div>
 
     <h2>💾 データ</h2>
@@ -750,10 +761,17 @@ $('#p-parent').addEventListener('click', async e => {
     a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
     return;
   }
+  if (t.closest('[data-act="change-pin"]')) {
+    const pin = await pinModal(true); if (pin == null) return;
+    const h = await pinHash(pin);
+    commit(st => { st.pinHash = h; });
+    celebrate('🔒', 'ばんごうを かえました', 'var(--good)', ['🔒']);
+    return;
+  }
   if (t.closest('[data-act="reset"]')) {
     if (!await confirmModal('⚠️', 'ぜんぶ リセット', 'ポイント・きろく・せっていが\nすべて きえます', 'リセット', true)) return;
     const fresh = defaults();
-    commit(st => replaceAll(st, JSON.parse(JSON.stringify(fresh)))); render();
+    commit(st => { const h = st.pinHash; replaceAll(st, JSON.parse(JSON.stringify(fresh))); if (h) st.pinHash = h; }); render();
   }
 });
 
@@ -795,8 +813,63 @@ function bump(kid) {
   if (el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
 }
 
-document.querySelector('nav.tabs').addEventListener('click', e => {
-  const b = e.target.closest('[data-tab]'); if (!b) return;
+/* ---------- おとなの あんしょうばんごう ----------
+   Keeps kids out of settings and undo; it is a household lock, not real security
+   (the page source is public). The hash lives in the shared state so every phone uses the same PIN. */
+const UNLOCK_MS = 5 * 60e3;
+let unlockedUntil = 0;
+async function pinHash(pin) {
+  const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('otetsudai:' + pin));
+  return [...new Uint8Array(buf)].map(x => x.toString(16).padStart(2, '0')).join('');
+}
+function pinModal(create) {
+  return new Promise(res => {
+    const sc = document.createElement('div');
+    sc.className = 'scrim';
+    sc.innerHTML = `<form class="modal" role="dialog" aria-modal="true"><div class="em">🔒</div>
+      <h3>${create ? 'あんしょうばんごうを きめてね' : 'おとなの あんしょうばんごう'}</h3>
+      <p>${create ? '4〜8けたの すうじ。かぞく みんなの スマホで おなじ ばんごうに なります' : 'すうじを いれてね'}</p>
+      <div class="pins">
+        <input id="pin1" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" aria-label="あんしょうばんごう">
+        ${create ? '<input id="pin2" class="pin" type="password" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="もういちど" aria-label="もういちど">' : ''}
+      </div>
+      <p class="pin-err" role="alert"></p>
+      <div class="acts"><button type="button" class="no">やめる</button><button type="submit" class="yes">OK</button></div></form>`;
+    const done = v => { sc.remove(); res(v); };
+    const form = sc.querySelector('form'), err = sc.querySelector('.pin-err');
+    sc.addEventListener('click', e => { if (e.target === sc || e.target.closest('.no')) done(null); });
+    form.addEventListener('submit', e => {
+      e.preventDefault();
+      const a = form.pin1.value.trim();
+      if (!/^\d{4,8}$/.test(a)) { err.textContent = '4〜8けたの すうじで いれてね'; return; }
+      if (create && a !== form.pin2.value.trim()) { err.textContent = '2かい いれた ばんごうが ちがいます'; return; }
+      done(a);
+    });
+    document.body.appendChild(sc);
+    form.pin1.focus();
+  });
+}
+async function requireParent() {
+  if (Date.now() < unlockedUntil) { unlockedUntil = Date.now() + UNLOCK_MS; return true; }
+  if (!state.pinHash) {
+    const pin = await pinModal(true); if (pin == null) return false;
+    const h = await pinHash(pin);
+    commit(st => { st.pinHash = h; });
+  } else {
+    const pin = await pinModal(false); if (pin == null) return false;
+    if (await pinHash(pin) !== state.pinHash) {
+      await confirmModal('🔒', 'ばんごうが ちがいます', 'もういちど ためしてね', 'OK');
+      return false;
+    }
+  }
+  unlockedUntil = Date.now() + UNLOCK_MS;
+  return true;
+}
+
+document.querySelector('nav.tabs').addEventListener('click', async e => {
+  const b = e.target.closest('[data-tab]'); if (!b || b.dataset.tab === ui.tab) return;
+  if (b.dataset.tab === 'parent' && !(await requireParent())) return;
+  if (ui.tab === 'parent') unlockedUntil = 0; // leaving the parent tab locks it again
   ui.tab = b.dataset.tab; render();
 });
 
