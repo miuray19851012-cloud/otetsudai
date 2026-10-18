@@ -1,0 +1,814 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="おてつだい">
+<meta name="theme-color" content="#fff7e8">
+<title>おてつだいポイント</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=M+PLUS+Rounded+1c:wght@500;800&display=swap">
+<style>
+/* Layout: header → two kid cards (tap to choose who) → tabs (おてつだい / ごほうび / きろく / おとな) → active panel; modal + gacha overlay on top */
+:root{
+  color-scheme: light;
+  --bg:#fff7e8; --card:#ffffff; --ink:#3a2a1a; --muted:#8a7660; --line:#f0e2c8;
+  --sun:#ffb627; --sun-deep:#e08a00;
+  --daichi:#2f7cf6; --daichi-soft:#e3eeff;
+  --shiyo:#f0559b; --shiyo-soft:#ffe4f0;
+  --good:#24a865; --bad:#e5484d; --bad-soft:#ffe8e8;
+  --r-n:#9aa8b8; --r-r:#3d9bff; --r-sr:#ffb627; --r-ssr:#ff5fc8;
+  --f-pop:"Mochiy Pop One","Hiragino Maru Gothic ProN","Hiragino Sans",sans-serif;
+  --f-body:"M PLUS Rounded 1c","Hiragino Maru Gothic ProN","Hiragino Sans","Yu Gothic",sans-serif;
+  --shadow:0 4px 0 rgba(120,80,20,.12), 0 10px 24px rgba(120,80,20,.08);
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html,body{margin:0}
+body{
+  background:var(--bg);
+  background-image:radial-gradient(circle at 1px 1px, rgba(224,138,0,.12) 1.5px, transparent 0);
+  background-size:22px 22px;
+  color:var(--ink); font-family:var(--f-body); font-weight:500;
+  -webkit-tap-highlight-color:transparent;
+  min-height:100vh;
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer;border:0;background:none}
+:focus-visible{outline:3px solid var(--sun);outline-offset:3px;border-radius:10px}
+
+.app{max-width:760px;margin:0 auto;padding-block:16px 40px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px))}
+.sync{display:flex;justify-content:center;margin:-6px 0 12px}
+.sync span{font-size:12px;font-weight:800;color:var(--muted);background:var(--card);border-radius:99px;padding:3px 12px;box-shadow:inset 0 0 0 2px var(--line)}
+.sync span.warn{color:var(--bad);box-shadow:inset 0 0 0 2px #f5a3a5}
+fieldset{border:0;margin:0;padding:0;min-width:0}
+header.top{display:flex;align-items:center;justify-content:center;gap:10px;margin:4px 0 14px}
+header.top h1{font-family:var(--f-pop);font-weight:400;font-size:clamp(22px,6vw,30px);margin:0;letter-spacing:.02em}
+header.top .logo{font-size:30px}
+
+/* kid cards */
+.kids{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.kid{
+  --c:var(--daichi); --soft:var(--daichi-soft);
+  position:relative;text-align:left;background:var(--card);border-radius:22px;padding:14px 14px 12px;
+  box-shadow:var(--shadow);border:3px solid transparent;transition:transform .15s,border-color .15s,background .15s;
+}
+.kid[data-kid="shiyo"]{--c:var(--shiyo);--soft:var(--shiyo-soft)}
+.kid.on{border-color:var(--c);background:var(--soft);transform:translateY(-2px)}
+.kid .row{display:flex;align-items:center;gap:10px}
+.kid .ava{width:48px;height:48px;border-radius:50%;display:grid;place-items:center;font-size:28px;background:var(--soft);border:3px solid var(--c);flex:none}
+.kid.on .ava{background:#fff}
+.kid .nm{font-family:var(--f-pop);font-size:20px;line-height:1.1}
+.kid .role{font-size:12px;color:var(--muted)}
+.kid .pts{font-family:var(--f-pop);font-size:clamp(34px,10vw,46px);color:var(--c);line-height:1;margin-top:8px;font-variant-numeric:tabular-nums}
+.kid .pts small{font-size:16px;margin-left:2px}
+.kid .bar{height:10px;border-radius:99px;background:rgba(0,0,0,.07);margin-top:8px;overflow:hidden}
+.kid .bar i{display:block;height:100%;background:var(--c);border-radius:99px;transition:width .4s}
+.kid .next{font-size:12px;color:var(--muted);margin-top:4px}
+.kid .check{position:absolute;top:-11px;right:12px;font-size:12px;font-weight:800;color:#fff;background:var(--c);border-radius:99px;padding:2px 8px;opacity:0;transition:opacity .15s}
+.kid.on .check{opacity:1}
+.kid.bump{animation:bump .5s}
+@keyframes bump{30%{transform:scale(1.05)}60%{transform:scale(.98)}}
+
+/* tabs */
+nav.tabs{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin:18px 0 14px;background:#fff;border-radius:18px;padding:6px;box-shadow:var(--shadow)}
+nav.tabs button{padding:10px 4px;border-radius:13px;font-weight:800;font-size:14px;color:var(--muted);display:flex;flex-direction:column;align-items:center;gap:2px}
+nav.tabs button span{font-size:22px}
+nav.tabs button[aria-selected="true"]{background:var(--sun);color:#fff}
+
+.panel h2{font-family:var(--f-pop);font-weight:400;font-size:19px;margin:20px 4px 10px;display:flex;align-items:center;gap:8px}
+.panel h2:first-child{margin-top:4px}
+.panel h2 .who{font-family:var(--f-body);font-weight:800;font-size:13px;padding:3px 10px;border-radius:99px;color:#fff;background:var(--who,var(--daichi))}
+.card{background:var(--card);border-radius:20px;padding:16px;box-shadow:var(--shadow)}
+.muted{color:var(--muted)}
+.hint{font-size:13px;color:var(--muted);margin:6px 4px 0}
+
+
+/* chores */
+.chores{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin-top:12px}
+.chore{background:var(--card);border-radius:18px;padding:14px 10px 12px;box-shadow:var(--shadow);display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;transition:transform .1s}
+.chore:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(120,80,20,.12)}
+.chore .em{font-size:38px;line-height:1}
+.chore .nm{font-weight:800;font-size:15px;line-height:1.3}
+.chore .pt{font-family:var(--f-pop);font-size:15px;color:#fff;background:var(--who,var(--daichi));border-radius:99px;padding:2px 12px}
+
+/* fight */
+.fight{background:var(--bad-soft);border:3px dashed #f5a3a5;border-radius:20px;padding:14px 16px;margin-top:22px}
+.fight .hd{display:flex;align-items:center;gap:10px;font-weight:800}
+.fight .hd span{font-size:30px}
+.fight .btns{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.fight .btns button{background:#fff;border-radius:14px;padding:10px 4px;font-weight:800;color:var(--bad);box-shadow:0 3px 0 rgba(229,72,77,.2)}
+
+/* rewards */
+.rewards{display:grid;gap:14px}
+@media (min-width:640px){.rewards{grid-template-columns:1fr 1fr}}
+.reward-hd{display:flex;align-items:center;gap:10px;font-family:var(--f-pop);font-size:18px}
+.reward-hd span{font-size:30px}
+.rate{font-size:13px;color:var(--muted);margin:4px 0 12px}
+.stepper{display:flex;align-items:center;justify-content:center;gap:10px}
+.stepper button{width:48px;height:48px;border-radius:50%;background:var(--bg);font-size:24px;font-weight:800;box-shadow:inset 0 0 0 2px var(--line)}
+.stepper button:disabled{opacity:.35;cursor:default}
+.stepper .val{min-width:110px;text-align:center}
+.stepper .val b{font-family:var(--f-pop);font-size:30px;font-weight:400;display:block;line-height:1.1}
+.yen{text-align:center;margin:10px 0 12px;font-weight:800}
+.yen b{font-family:var(--f-pop);font-weight:400;font-size:26px;color:var(--good)}
+.big{width:100%;padding:14px;border-radius:16px;font-weight:800;font-size:17px;color:#fff;background:var(--good);box-shadow:0 4px 0 #18804c}
+.big:active{transform:translateY(3px);box-shadow:0 1px 0 #18804c}
+.big:disabled{background:#cfc4b2;box-shadow:0 4px 0 #b3a690;cursor:default;transform:none}
+.big.sun{background:var(--sun);box-shadow:0 4px 0 var(--sun-deep)}
+.big.sun:active{box-shadow:0 1px 0 var(--sun-deep)}
+.big.sun:disabled{background:#cfc4b2;box-shadow:0 4px 0 #b3a690}
+.paid{font-size:12px;color:var(--muted);text-align:center;margin-top:10px}
+
+/* gacha machine */
+.machine{position:relative;width:170px;margin:4px auto 14px}
+.globe{width:170px;height:150px;border-radius:85px 85px 20px 20px;background:radial-gradient(circle at 35% 30%,#fff 0 8%,rgba(255,255,255,.4) 12%,rgba(200,235,255,.5) 60%,rgba(160,210,250,.6));border:5px solid #d23a6a;border-bottom:0;position:relative;overflow:hidden}
+.globe i{position:absolute;width:34px;height:34px;border-radius:50%;background:linear-gradient(180deg,var(--c) 50%,#fff 50%);border:2px solid rgba(0,0,0,.12)}
+.base{height:84px;background:#d23a6a;border-radius:0 0 18px 18px;position:relative}
+.knob{position:absolute;left:50%;top:14px;width:46px;height:46px;margin-left:-23px;border-radius:50%;background:#fff;border:5px solid #ffd447;box-shadow:inset 0 0 0 4px #fff}
+.knob::after{content:"";position:absolute;left:50%;top:50%;width:30px;height:8px;margin:-4px 0 0 -15px;border-radius:4px;background:#ffb627}
+.chute{position:absolute;right:14px;bottom:12px;width:30px;height:24px;border-radius:6px;background:#7a1638}
+.machine.spin .knob{animation:turn .9s ease-in-out}
+.machine.spin .globe i{animation:jiggle .25s 4 alternate}
+@keyframes turn{to{transform:rotate(360deg)}}
+@keyframes jiggle{to{translate:var(--dx) -12px}}
+.odds{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px;font-size:12px}
+.odds span{padding:2px 9px;border-radius:99px;color:#fff;font-weight:800}
+
+.box{margin-top:14px}
+.box ul{list-style:none;margin:0;padding:0;display:grid;gap:8px}
+.box li{display:flex;align-items:center;gap:10px;background:var(--card);border-radius:16px;padding:10px 12px;box-shadow:var(--shadow)}
+.box li .em{font-size:26px}
+.box li .nm{font-weight:800;flex:1}
+.box li button{background:var(--bg);border-radius:99px;padding:6px 12px;font-weight:800;font-size:13px;box-shadow:inset 0 0 0 2px var(--line)}
+.rar{font-size:11px;font-weight:800;color:#fff;border-radius:6px;padding:1px 6px;margin-right:4px;vertical-align:2px}
+.rar-N{background:var(--r-n)}.rar-R{background:var(--r-r)}.rar-SR{background:var(--r-sr)}.rar-SSR{background:var(--r-ssr)}
+.empty{text-align:center;color:var(--muted);padding:18px;background:rgba(255,255,255,.6);border-radius:16px;border:2px dashed var(--line)}
+
+/* log */
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--card);border-radius:18px;padding:12px 14px;box-shadow:var(--shadow);border-top:6px solid var(--c)}
+.stat .nm{font-weight:800}
+.stat dl{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:6px 0 0;font-size:13px}
+.stat dd{margin:0;text-align:right;font-weight:800;font-variant-numeric:tabular-nums}
+.filter{display:flex;gap:6px;margin:14px 0 10px}
+.filter button{padding:6px 14px;border-radius:99px;background:#fff;font-weight:800;font-size:13px;box-shadow:inset 0 0 0 2px var(--line)}
+.filter button[aria-pressed="true"]{background:var(--ink);color:#fff;box-shadow:none}
+.log{list-style:none;margin:0;padding:0;background:var(--card);border-radius:18px;box-shadow:var(--shadow);overflow:hidden}
+.log li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-bottom:1px solid var(--line)}
+.log li:last-child{border-bottom:0}
+.log .dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:none}
+.log .tx{flex:1;min-width:0}
+.log .tx b{display:block;font-size:14px;overflow-wrap:anywhere}
+.log .tx small{color:var(--muted);font-size:12px}
+.log .d{font-family:var(--f-pop);font-size:16px;font-variant-numeric:tabular-nums}
+.log .d.plus{color:var(--good)}.log .d.minus{color:var(--bad)}
+.log .undo{font-size:12px;color:var(--muted);padding:4px 6px;border-radius:8px}
+.day{background:var(--bg);font-size:12px;font-weight:800;color:var(--muted);padding:6px 12px!important}
+
+/* settings */
+.set-grid{display:grid;gap:10px}
+.field{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.field label{font-weight:800;font-size:14px}
+.field small{display:block;font-weight:500;color:var(--muted);font-size:12px}
+.num{width:84px;padding:8px 10px;border-radius:12px;border:2px solid var(--line);background:var(--bg);text-align:right;font-weight:800}
+.edit-list{display:grid;gap:8px}
+.edit-row{display:grid;grid-template-columns:52px 1fr 70px 36px;gap:6px;align-items:center}
+.edit-row input,.edit-row select{width:100%;padding:8px;border-radius:12px;border:2px solid var(--line);background:var(--bg);min-width:0}
+.edit-row .emo{text-align:center;font-size:20px;padding:4px}
+.edit-row .del{width:36px;height:36px;border-radius:10px;color:var(--bad);font-size:18px;background:var(--bad-soft)}
+.add{margin-top:10px;width:100%;padding:10px;border-radius:12px;border:2px dashed var(--line);font-weight:800;color:var(--muted)}
+.adjust{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.adjust select,.adjust input{width:100%;padding:10px;border-radius:12px;border:2px solid var(--line);background:var(--bg);font-weight:800}
+.adjust input{grid-column:1/-1}
+.adjust .btn2{padding:10px;border-radius:12px;font-weight:800;color:#fff}
+.danger{margin-top:12px;width:100%;padding:12px;border-radius:14px;font-weight:800;color:var(--bad);background:var(--bad-soft)}
+.backup{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.backup button,.backup label{padding:10px;border-radius:12px;font-weight:800;text-align:center;background:var(--bg);box-shadow:inset 0 0 0 2px var(--line);cursor:pointer;font-size:14px}
+
+/* toast */
+.toast{position:fixed;left:50%;top:22%;transform:translate(-50%,0);z-index:60;pointer-events:none;text-align:center;font-family:var(--f-pop);animation:pop 1.4s forwards}
+.toast .v{font-size:58px;line-height:1;color:var(--c);-webkit-text-stroke:2px #fff;text-shadow:0 4px 0 rgba(0,0,0,.12)}
+.toast .l{font-size:18px;background:#fff;border-radius:99px;padding:4px 14px;margin-top:6px;display:inline-block;box-shadow:var(--shadow);font-family:var(--f-body);font-weight:800}
+@keyframes pop{0%{opacity:0;transform:translate(-50%,20px) scale(.6)}15%{opacity:1;transform:translate(-50%,0) scale(1.1)}25%{transform:translate(-50%,0) scale(1)}80%{opacity:1}100%{opacity:0;transform:translate(-50%,-40px)}}
+.confetti{position:fixed;z-index:59;pointer-events:none;font-size:26px;animation:fly 1.2s ease-out forwards}
+@keyframes fly{to{transform:translate(var(--x),var(--y)) rotate(var(--r));opacity:0}}
+
+/* modal & gacha overlay */
+.scrim{position:fixed;inset:0;z-index:70;background:rgba(40,25,10,.55);display:grid;place-items:center;padding:max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))}
+.modal{background:#fff;border-radius:24px;padding:22px 18px 16px;width:min(380px,100%);text-align:center;box-shadow:0 20px 50px rgba(0,0,0,.25);animation:rise .2s}
+.modal .em{font-size:48px}
+.modal h3{font-family:var(--f-pop);font-weight:400;font-size:20px;margin:6px 0}
+.modal p{margin:0 0 16px;color:var(--muted);white-space:pre-line}
+.modal .acts{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.modal .acts button{padding:12px;border-radius:14px;font-weight:800}
+.modal .no{background:var(--bg)}
+.modal .yes{background:var(--sun);color:#fff}
+.modal .yes.bad{background:var(--bad)}
+@keyframes rise{from{transform:translateY(20px);opacity:0}}
+
+.gacha-ov{position:fixed;inset:0;z-index:80;background:radial-gradient(circle,#3b1f6b,#160a2e);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:18px;padding:max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));color:#fff;text-align:center}
+.gacha-ov .tap{font-weight:800;opacity:.8;animation:blink 1s infinite}
+@keyframes blink{50%{opacity:.3}}
+.capsule{width:150px;height:150px;position:relative;animation:drop .7s cubic-bezier(.3,1.6,.6,1)}
+.capsule .top,.capsule .btm{position:absolute;left:0;width:150px;height:75px;transition:transform .5s cubic-bezier(.3,1.4,.6,1),opacity .5s}
+.capsule .top{top:0;border-radius:75px 75px 0 0;background:var(--c);box-shadow:inset -12px 10px 0 rgba(255,255,255,.25)}
+.capsule .btm{bottom:0;border-radius:0 0 75px 75px;background:#f6f1ff;box-shadow:inset 0 -10px 0 rgba(0,0,0,.08)}
+.capsule.shake{animation:wob .4s infinite}
+.capsule.open .top{transform:translate(-40px,-90px) rotate(-35deg);opacity:0}
+.capsule.open .btm{transform:translate(40px,90px) rotate(25deg);opacity:0}
+@keyframes drop{from{transform:translateY(-120vh)}}
+@keyframes wob{25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}}
+.prize{display:flex;flex-direction:column;align-items:center;gap:8px;animation:rise .5s}
+.prize .rays{width:200px;height:200px;border-radius:50%;display:grid;place-items:center;font-size:96px;background:radial-gradient(circle,var(--c) 0 30%,transparent 70%);position:relative}
+.prize .rays::before{content:"";position:absolute;inset:-30px;background:repeating-conic-gradient(var(--c) 0 10deg,transparent 10deg 30deg);border-radius:50%;opacity:.35;animation:rot 8s linear infinite;mask:radial-gradient(circle,#000 30%,transparent 70%)}
+@keyframes rot{to{transform:rotate(360deg)}}
+.prize .rk{font-family:var(--f-pop);font-size:30px;color:var(--c);letter-spacing:.06em}
+.prize .pn{font-family:var(--f-pop);font-size:clamp(22px,6vw,30px)}
+.gacha-ov .close{background:var(--sun);color:#fff;font-weight:800;padding:14px 40px;border-radius:99px;font-size:17px;box-shadow:0 4px 0 var(--sun-deep)}
+
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top"><span class="logo">⭐</span><h1>おてつだいポイント</h1><span class="logo">⭐</span></header>
+  <div class="sync"><span id="sync">よみこみちゅう…</span></div>
+
+  <section class="kids" id="kids"></section>
+
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="chore" aria-selected="true"><span>🧹</span>おてつだい</button>
+    <button role="tab" data-tab="reward" aria-selected="false"><span>🎁</span>ごほうび</button>
+    <button role="tab" data-tab="log" aria-selected="false"><span>📒</span>きろく</button>
+    <button role="tab" data-tab="parent" aria-selected="false"><span>🔧</span>おとな</button>
+  </nav>
+
+  <main>
+    <section class="panel" id="p-chore"></section>
+    <section class="panel" id="p-reward" hidden></section>
+    <section class="panel" id="p-log" hidden></section>
+    <section class="panel" id="p-parent" hidden></section>
+  </main>
+</div>
+
+<script>
+const KEY = 'otetsudai-v1';
+const KIDS = [
+  { id:'daichi', name:'大智', role:'おにいちゃん', emoji:'🦖', color:'var(--daichi)' },
+  { id:'shiyo',  name:'詩世', role:'いもうと',     emoji:'🐰', color:'var(--shiyo)'  },
+];
+const RARITY = {
+  N:  { label:'ノーマル',        weight:60, color:'var(--r-n)'   },
+  R:  { label:'レア',            weight:28, color:'var(--r-r)'   },
+  SR: { label:'スーパーレア',    weight:10, color:'var(--r-sr)'  },
+  SSR:{ label:'ウルトラレア',    weight:2,  color:'var(--r-ssr)' },
+};
+const uid = () => Math.random().toString(36).slice(2, 10);
+
+function defaults() {
+  return {
+    points: { daichi:0, shiyo:0 },
+    cashTotal: { daichi:0, shiyo:0 },
+    settings: { fightPenalty:5, yenPerPoint:10, cashStep:10, gachaCost:20 },
+    chores: [
+      ['🍽️','しょっきをはこぶ',2], ['🧽','おさらあらい',5], ['👕','せんたくものをたたむ',4],
+      ['🧹','おそうじ',5], ['🛁','おふろそうじ',6], ['🗑️','ゴミだし',3],
+      ['🧸','おもちゃのかたづけ',2], ['🌱','おはなにみずやり',2], ['👟','くつをそろえる',1],
+      ['🛏️','ふとんをしく',3],
+    ].map(([emoji,name,pt]) => ({ id:uid(), emoji, name, pt })),
+    prizes: [
+      ['🍬','おやつ 1こ','N'], ['📺','テレビ 15ふん','N'], ['🎮','ゲーム 15ふん','N'],
+      ['🍦','アイス','R'], ['🎮','ゲーム 30ぷん','R'], ['📖','えほん よんでもらう','R'],
+      ['🍛','ゆうはん リクエスト','SR'], ['🌙','よふかし 30ぷん','SR'],
+      ['🎁','すきなおもちゃ（500えんまで）','SSR'], ['🎡','すきなところへ おでかけ','SSR'],
+    ].map(([emoji,name,rarity]) => ({ id:uid(), emoji, name, rarity })),
+    box: [],   // gacha prizes not yet used: {id, kid, prizeName, emoji, rarity, ts}
+    log: [],   // {id, ts, kid, type, label, delta, yen?, boxId?}
+  };
+}
+
+const ui = { kid:'daichi', tab:'chore', cashPts:0, logFilter:'all' };
+const normalize = d => Object.assign(defaults(), JSON.parse(JSON.stringify(d)));
+
+/* Storage: one Firestore document (families/<FAMILY_ID>) holds the whole family's state,
+   so every phone sees the same points. Each action runs as a transaction on the latest server copy,
+   so two phones recording at the same moment both count. Without FIREBASE_CONFIG it keeps data in this browser only. */
+// Firebase web config is a public identifier, not a secret; access is limited by firestore.rules
+const FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCYpPmttIfx3I5Lad8tMPrDpOA-nB6RN2Y",
+  authDomain: "otetsudai-1d633.firebaseapp.com",
+  projectId: "otetsudai-1d633",
+  storageBucket: "otetsudai-1d633.firebasestorage.app",
+  messagingSenderId: "543428829383",
+  appId: "1:543428829383:web:04ac604c509cb3191bdee2",
+};
+const FAMILY_ID = 'fam-Sp5fkfHBs7i1JLKTeVZF9BKY';
+
+let state = defaults();
+let fb = null, inflight = 0;
+const sync = { mode:'loading', error:'' };
+
+function loadLocal() {
+  try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.points) return normalize(s); } catch {}
+  return defaults();
+}
+function replaceAll(target, src) { for (const k of Object.keys(target)) delete target[k]; Object.assign(target, src); }
+
+// fn mutates the state it is given; it runs once here for instant feedback and again on the server copy
+async function commit(fn) {
+  fn(state);
+  if (state.log.length > 1000) state.log.length = 1000;
+  if (!fb) {
+    if (sync.mode === 'local') try { localStorage.setItem(KEY, JSON.stringify(state)); } catch {}
+    return;
+  }
+  inflight++;
+  try {
+    const next = await fb.runTransaction(fb.db, async tx => {
+      const snap = await tx.get(fb.ref);
+      const s = snap.exists() ? normalize(snap.data()) : defaults();
+      fn(s);
+      if (s.log.length > 1000) s.log.length = 1000;
+      tx.set(fb.ref, JSON.parse(JSON.stringify(s)));
+      return s;
+    });
+    if (--inflight === 0) { state = next; sync.error = ''; renderQuiet(); }
+  } catch (e) {
+    inflight--;
+    console.error(e);
+    sync.error = 'ほぞん できませんでした。でんぱを たしかめて もういちど してね';
+    renderSync();
+  }
+}
+function renderSync() {
+  const el = $('#sync');
+  el.className = sync.error ? 'warn' : '';
+  el.textContent = sync.error
+    || (sync.mode === 'loading' ? 'よみこみちゅう…'
+      : sync.mode === 'local' ? '📱 この たんまつ だけに ほぞん'
+      : '☁️ かぞくで きょうゆう ちゅう');
+}
+// re-render without wiping an input someone is typing into
+function renderQuiet() {
+  const editing = document.activeElement?.matches('input,select') && document.activeElement.closest('main');
+  if (editing) { renderKids(); renderSync(); } else render();
+}
+async function connect() {
+  if (!FIREBASE_CONFIG) { sync.mode = 'local'; state = loadLocal(); render(); return; }
+  try {
+    const V = 'https://www.gstatic.com/firebasejs/10.12.2/';
+    const { initializeApp } = await import(V + 'firebase-app.js');
+    const { getFirestore, doc, onSnapshot, runTransaction } = await import(V + 'firebase-firestore.js');
+    const db = getFirestore(initializeApp(FIREBASE_CONFIG));
+    fb = { db, ref: doc(db, 'families', FAMILY_ID), runTransaction };
+    onSnapshot(fb.ref, snap => {
+      if (inflight) return; // a transaction of ours is about to hand back the newer state
+      if (snap.exists()) state = normalize(snap.data());
+      sync.mode = 'shared'; sync.error = '';
+      renderQuiet();
+    }, e => { console.error(e); sync.error = 'つながりません。でんぱを たしかめてね'; renderSync(); });
+  } catch (e) {
+    console.error(e);
+    sync.error = 'よみこめませんでした。ページを ひらきなおしてね';
+    renderSync();
+  }
+}
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const kidOf = id => KIDS.find(k => k.id === id);
+const $ = sel => document.querySelector(sel);
+
+function addLog(st, kid, type, label, delta, extra = {}) {
+  st.points[kid] += delta;
+  st.log.unshift({ id:uid(), ts:Date.now(), kid, type, label, delta, ...extra });
+}
+
+/* ---------- kid cards ---------- */
+function renderKids() {
+  const cost = state.settings.gachaCost;
+  $('#kids').innerHTML = KIDS.map(k => {
+    const p = state.points[k.id];
+    const pct = Math.max(0, Math.min(100, p / cost * 100));
+    const on = ui.kid === k.id;
+    const next = p >= cost ? `ガチャ ${Math.floor(p / cost)}かい まわせる！` : `ガチャまで あと ${cost - p}pt`;
+    return `<button class="kid ${on ? 'on' : ''}" data-kid="${k.id}" aria-pressed="${ui.kid === k.id}">
+      <span class="check">えらんでるよ</span>
+      <div class="row"><div class="ava">${k.emoji}</div><div><div class="nm">${k.name}</div><div class="role">${k.role}</div></div></div>
+      <div class="pts">${p}<small>pt</small></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="next">${next}</div>
+    </button>`;
+  }).join('');
+}
+$('#kids').addEventListener('click', e => {
+  const b = e.target.closest('.kid'); if (!b) return;
+  ui.kid = b.dataset.kid;
+  ui.cashPts = 0;
+  render();
+});
+
+/* ---------- おてつだい ---------- */
+function renderChore() {
+  const k = kidOf(ui.kid), s = state.settings;
+  const who = k.color;
+  $('#p-chore').innerHTML = `
+    <h2>だれが やった？ <span class="who" style="--who:${who}">${k.emoji} ${k.name}</span></h2>
+    <div class="chores" style="--who:${who}">
+      ${state.chores.map(c => `<button class="chore" data-chore="${c.id}">
+        <span class="em">${esc(c.emoji)}</span><span class="nm">${esc(c.name)}</span>
+        <span class="pt">＋${c.pt}pt</span>
+      </button>`).join('')}
+    </div>
+    ${state.chores.length ? '' : '<p class="empty">「おとな」タブで おてつだいを ついかしてね</p>'}
+    <div class="fight">
+      <div class="hd"><span>😠</span><div>けんか しちゃった…<br><small class="muted">ひとり −${s.fightPenalty}pt</small></div></div>
+      <div class="btns">
+        ${KIDS.map(k => `<button data-fight="${k.id}">${k.emoji} ${k.name}</button>`).join('')}
+        <button data-fight="both">ふたりとも</button>
+      </div>
+    </div>`;
+}
+$('#p-chore').addEventListener('click', async e => {
+  const cb = e.target.closest('[data-chore]');
+  if (cb) {
+    const c = state.chores.find(x => x.id === cb.dataset.chore); if (!c) return;
+    const k = kidOf(ui.kid);
+    commit(st => addLog(st, k.id, 'chore', `${c.emoji} ${c.name}`, c.pt));
+    render(); celebrate(`＋${c.pt}pt`, `${k.name} えらい！`, k.color, ['⭐','✨','🌟', k.emoji]);
+    bump(k.id);
+    return;
+  }
+  const fb = e.target.closest('[data-fight]');
+  if (fb) {
+    const ids = fb.dataset.fight === 'both' ? KIDS.map(k => k.id) : [fb.dataset.fight];
+    const names = ids.map(id => kidOf(id).name).join('と');
+    const pen = state.settings.fightPenalty;
+    const ok = await confirmModal('😠', 'けんか しちゃった？', `${names}　ひとり −${pen}pt\nなかなおり できたかな？`, `−${pen}pt する`, true);
+    if (!ok) return;
+    commit(st => ids.forEach(id => addLog(st, id, 'fight', '😠 けんか', -pen)));
+    render(); celebrate(`−${pen}pt`, 'つぎは なかよくね', 'var(--bad)', ['💦','😢','🌧️']);
+  }
+});
+
+/* ---------- ごほうび ---------- */
+function renderReward() {
+  const k = kidOf(ui.kid), s = state.settings, p = state.points[k.id];
+  const step = Math.max(1, s.cashStep);
+  const maxCash = Math.max(0, Math.floor(p / step) * step);
+  if (ui.cashPts > maxCash) ui.cashPts = maxCash;
+  if (ui.cashPts === 0 && maxCash > 0) ui.cashPts = step;
+  const pool = Object.keys(RARITY).filter(r => state.prizes.some(x => x.rarity === r));
+  const totalW = pool.reduce((a, r) => a + RARITY[r].weight, 0);
+  const box = state.box.filter(b => b.kid === k.id);
+  const balls = ['#ff5f6d','#ffb627','#3d9bff','#24a865','#ff5fc8','#8b5cf6','#ffd447','#5ed1ff'];
+  const ballPos = [[14,96],[50,100],[86,98],[118,94],[30,66],[68,70],[104,64],[48,36],[88,38]];
+
+  $('#p-reward').innerHTML = `
+    <h2>ごほうびと こうかん <span class="who" style="--who:${k.color}">${k.emoji} ${k.name}　${p}pt</span></h2>
+    <div class="rewards">
+      <div class="card">
+        <div class="reward-hd"><span>💰</span>おこづかい</div>
+        <div class="rate">${s.cashStep}pt ＝ ${s.cashStep * s.yenPerPoint}えん</div>
+        <div class="stepper">
+          <button data-cash="-1" ${ui.cashPts <= step ? 'disabled' : ''} aria-label="へらす">−</button>
+          <div class="val"><b>${ui.cashPts}</b>pt つかう</div>
+          <button data-cash="1" ${ui.cashPts + step > maxCash ? 'disabled' : ''} aria-label="ふやす">＋</button>
+        </div>
+        <div class="yen">→ <b>${(ui.cashPts * s.yenPerPoint).toLocaleString()}</b> えん</div>
+        <button class="big" data-act="cash" ${ui.cashPts <= 0 ? 'disabled' : ''}>おこづかいに こうかん</button>
+        <div class="paid">これまでに もらった おこづかい：${state.cashTotal[k.id].toLocaleString()}えん</div>
+      </div>
+      <div class="card">
+        <div class="reward-hd"><span>🎰</span>ガチャガチャ</div>
+        <div class="rate">1かい ${s.gachaCost}pt</div>
+        <div class="machine" id="machine">
+          <div class="globe">${ballPos.map(([x,y],i) => `<i style="left:${x}px;top:${y}px;--c:${balls[i % balls.length]};--dx:${(i % 3 - 1) * 6}px"></i>`).join('')}</div>
+          <div class="base"><div class="knob"></div><div class="chute"></div></div>
+        </div>
+        <button class="big sun" data-act="gacha" ${p < s.gachaCost || !pool.length ? 'disabled' : ''}>${p < s.gachaCost ? `あと ${s.gachaCost - p}pt で まわせる` : 'ガチャを まわす！'}</button>
+        <div class="odds">${pool.map(r => `<span style="background:${RARITY[r].color}">${r} ${Math.round(RARITY[r].weight / totalW * 100)}%</span>`).join('')}</div>
+      </div>
+    </div>
+    <div class="box">
+      <h2>🎁 ${k.name}の ごほうびボックス</h2>
+      ${box.length ? `<ul>${box.map(b => `<li><span class="em">${esc(b.emoji)}</span><span class="nm"><span class="rar rar-${b.rarity}">${b.rarity}</span>${esc(b.prizeName)}</span><button data-use="${b.id}">つかった！</button></li>`).join('')}</ul>`
+        : '<p class="empty">ガチャで あたった ごほうびが ここに はいるよ</p>'}
+    </div>`;
+}
+$('#p-reward').addEventListener('click', async e => {
+  const s = state.settings, k = kidOf(ui.kid);
+  const sb = e.target.closest('[data-cash]');
+  if (sb) { ui.cashPts += Number(sb.dataset.cash) * Math.max(1, s.cashStep); renderReward(); return; }
+  if (e.target.closest('[data-act="cash"]')) {
+    const pts = ui.cashPts, yen = pts * s.yenPerPoint;
+    if (pts <= 0 || pts > state.points[k.id]) return;
+    const ok = await confirmModal('💰', `${yen.toLocaleString()}えん に こうかん`, `${k.name}の ${pts}pt を つかうよ\nおうちのひとに おこづかいを もらってね`, 'こうかんする');
+    if (!ok) return;
+    commit(st => {
+      st.cashTotal[k.id] += yen;
+      addLog(st, k.id, 'cash', `💰 おこづかい ${yen.toLocaleString()}えん`, -pts, { yen });
+    });
+    ui.cashPts = 0;
+    render(); celebrate(`${yen.toLocaleString()}えん`, 'おこづかい ゲット！', 'var(--good)', ['💰','🪙','✨']);
+    return;
+  }
+  if (e.target.closest('[data-act="gacha"]')) { pullGacha(); return; }
+  const ub = e.target.closest('[data-use]');
+  if (ub) {
+    const b = state.box.find(x => x.id === ub.dataset.use); if (!b) return;
+    const ok = await confirmModal(b.emoji, 'ごほうびを つかう？', b.prizeName, 'つかった！');
+    if (!ok) return;
+    commit(st => { st.box = st.box.filter(x => x.id !== b.id); });
+    renderReward();
+  }
+});
+
+function drawPrize() {
+  const pool = Object.keys(RARITY).filter(r => state.prizes.some(x => x.rarity === r));
+  let roll = Math.random() * pool.reduce((a, r) => a + RARITY[r].weight, 0);
+  let rar = pool[pool.length - 1];
+  for (const r of pool) { if ((roll -= RARITY[r].weight) < 0) { rar = r; break; } }
+  const cands = state.prizes.filter(x => x.rarity === rar);
+  return cands[Math.floor(Math.random() * cands.length)];
+}
+let pulling = false;
+function pullGacha() {
+  const k = kidOf(ui.kid), cost = state.settings.gachaCost;
+  if (pulling || state.points[k.id] < cost) return;
+  const prize = drawPrize(); if (!prize) return;
+  pulling = true;
+  const boxId = uid(), ts = Date.now();
+  commit(st => {
+    st.box.unshift({ id:boxId, kid:k.id, prizeName:prize.name, emoji:prize.emoji, rarity:prize.rarity, ts });
+    addLog(st, k.id, 'gacha', `🎰 ガチャ →「${prize.emoji} ${prize.name}」`, -cost, { boxId });
+  });
+
+  const m = $('#machine'); m.classList.add('spin');
+  setTimeout(() => {
+    m.classList.remove('spin');
+    const rc = RARITY[prize.rarity].color;
+    const ov = document.createElement('div');
+    ov.className = 'gacha-ov';
+    ov.innerHTML = `<div class="capsule" style="--c:${rc}"><div class="top"></div><div class="btm"></div></div><div class="tap">カプセルを タップして あけてね！</div>`;
+    document.body.appendChild(ov);
+    const cap = ov.querySelector('.capsule');
+    setTimeout(() => cap.classList.add('shake'), 700);
+    cap.addEventListener('click', () => {
+      cap.classList.remove('shake'); cap.classList.add('open');
+      ov.querySelector('.tap').remove();
+      setTimeout(() => {
+        cap.remove();
+        ov.insertAdjacentHTML('beforeend', `<div class="prize" style="--c:${rc}">
+          <div class="rk">${prize.rarity}　${RARITY[prize.rarity].label}</div>
+          <div class="rays">${esc(prize.emoji)}</div>
+          <div class="pn">${esc(prize.name)}</div>
+        </div><button class="close">やったね！</button>`);
+        if (prize.rarity === 'SR' || prize.rarity === 'SSR') burst(['🎉','✨','⭐','🌟','💖'], 30);
+        ov.querySelector('.close').addEventListener('click', () => { ov.remove(); pulling = false; render(); });
+      }, 450);
+    }, { once:true });
+  }, 950);
+}
+
+/* ---------- きろく ---------- */
+function dayKey(ts) { const d = new Date(ts); return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`; }
+function renderLog() {
+  const now = new Date();
+  const today0 = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+  const week0 = today0 - ((now.getDay() + 6) % 7) * 864e5; // monday
+  const sum = (kid, from, types) => state.log.filter(l => l.kid === kid && l.ts >= from && types.includes(l.type)).reduce((a, l) => a + l.delta, 0);
+  const cnt = (kid, from, type) => state.log.filter(l => l.kid === kid && l.ts >= from && l.type === type).length;
+  const earn = ['chore'];
+
+  const list = state.log.filter(l => ui.logFilter === 'all' || l.kid === ui.logFilter).slice(0, 200);
+  let lastDay = '', rows = '';
+  for (const l of list) {
+    const dk = dayKey(l.ts);
+    if (dk !== lastDay) {
+      lastDay = dk; const d = new Date(l.ts);
+      rows += `<li class="day">${d.getMonth() + 1}がつ ${d.getDate()}にち（${'日月火水木金土'[d.getDay()]}）</li>`;
+    }
+    const k = kidOf(l.kid), t = new Date(l.ts);
+    rows += `<li style="--c:${k.color}"><span class="dot"></span>
+      <span class="tx"><b>${esc(l.label)}</b><small>${k.name}・${t.getHours()}:${String(t.getMinutes()).padStart(2,'0')}</small></span>
+      <span class="d ${l.delta >= 0 ? 'plus' : 'minus'}">${l.delta >= 0 ? '+' : ''}${l.delta}</span>
+      <button class="undo" data-undo="${l.id}" aria-label="とりけし">✕</button></li>`;
+  }
+
+  $('#p-log').innerHTML = `
+    <h2>📊 がんばりまとめ</h2>
+    <div class="stats">${KIDS.map(k => `<div class="stat" style="--c:${k.color}">
+      <div class="nm">${k.emoji} ${k.name}</div>
+      <dl><dt>きょう</dt><dd>+${sum(k.id, today0, earn)}pt</dd>
+      <dt>こんしゅう</dt><dd>+${sum(k.id, week0, earn)}pt</dd>
+      <dt>😠 けんか</dt><dd>${cnt(k.id, week0, 'fight')}かい</dd></dl>
+    </div>`).join('')}</div>
+    <p class="hint">「こんしゅう」は げつようびから かぞえるよ</p>
+    <div class="filter">
+      <button data-filter="all" aria-pressed="${ui.logFilter === 'all'}">ぜんぶ</button>
+      ${KIDS.map(k => `<button data-filter="${k.id}" aria-pressed="${ui.logFilter === k.id}">${k.name}</button>`).join('')}
+    </div>
+    ${rows ? `<ul class="log">${rows}</ul><p class="hint">✕ で とりけすと ポイントが もとに もどります</p>` : '<p class="empty">まだ きろくが ないよ</p>'}`;
+}
+$('#p-log').addEventListener('click', async e => {
+  const fb = e.target.closest('[data-filter]');
+  if (fb) { ui.logFilter = fb.dataset.filter; renderLog(); return; }
+  const ub = e.target.closest('[data-undo]');
+  if (ub) {
+    const l = state.log.find(x => x.id === ub.dataset.undo); if (!l) return;
+    const ok = await confirmModal('↩️', 'とりけしますか？', `${kidOf(l.kid).name}：${l.label}\n${l.delta >= 0 ? '+' : ''}${l.delta}pt を もとに もどします`, 'とりけす', true);
+    if (!ok) return;
+    const id = l.id;
+    commit(st => {
+      const e = st.log.find(x => x.id === id); if (!e) return; // already undone on another phone
+      st.points[e.kid] -= e.delta;
+      if (e.type === 'cash' && e.yen) st.cashTotal[e.kid] -= e.yen;
+      if (e.boxId) st.box = st.box.filter(b => b.id !== e.boxId);
+      st.log = st.log.filter(x => x.id !== id);
+    });
+    render();
+  }
+});
+
+/* ---------- おとな（せってい） ---------- */
+function renderParent() {
+  const s = state.settings;
+  const numField = (key, label, sub) => `<div class="field"><label for="s-${key}">${label}<small>${sub}</small></label><input class="num" id="s-${key}" type="number" min="0" inputmode="numeric" data-set="${key}" value="${s[key]}"></div>`;
+  $('#p-parent').innerHTML = `
+    <h2>⚙️ ポイントの きまり</h2>
+    <div class="card set-grid">
+      ${numField('fightPenalty', '😠 けんかの マイナス', 'ひとり あたり ひく pt')}
+      ${numField('gachaCost', '🎰 ガチャ 1かいの pt', '')}
+      ${numField('cashStep', '💰 こうかんの たんい', 'この pt ずつ こうかんできる')}
+      ${numField('yenPerPoint', '💴 1pt ＝ なんえん？', '')}
+    </div>
+
+    <h2>🧹 おてつだいリスト</h2>
+    <div class="card">
+      <div class="edit-list">${state.chores.map(c => `<div class="edit-row" data-row="${c.id}">
+        <input class="emo" data-f="emoji" value="${esc(c.emoji)}" aria-label="えもじ">
+        <input data-f="name" value="${esc(c.name)}" aria-label="なまえ">
+        <input class="num" type="number" min="0" data-f="pt" value="${c.pt}" aria-label="ポイント">
+        <button class="del" data-del-chore="${c.id}" aria-label="さくじょ">🗑</button>
+      </div>`).join('')}</div>
+      <button class="add" data-act="add-chore">＋ おてつだいを ついか</button>
+    </div>
+
+    <h2>🎰 ガチャの けいひん</h2>
+    <div class="card">
+      <div class="edit-list">${state.prizes.map(p => `<div class="edit-row" data-prize="${p.id}">
+        <input class="emo" data-f="emoji" value="${esc(p.emoji)}" aria-label="えもじ">
+        <input data-f="name" value="${esc(p.name)}" aria-label="なまえ">
+        <select data-f="rarity" aria-label="レアリティ">${Object.keys(RARITY).map(r => `<option ${p.rarity === r ? 'selected' : ''}>${r}</option>`).join('')}</select>
+        <button class="del" data-del-prize="${p.id}" aria-label="さくじょ">🗑</button>
+      </div>`).join('')}</div>
+      <button class="add" data-act="add-prize">＋ けいひんを ついか</button>
+      <p class="hint">でる かくりつ：${Object.entries(RARITY).map(([r, v]) => `${r} ${v.weight}%`).join('・')}（けいひんが ない ランクは でません）</p>
+    </div>
+
+    <h2>✏️ ポイントを ちょうせい</h2>
+    <div class="card adjust">
+      <select id="adj-kid">${KIDS.map(k => `<option value="${k.id}">${k.name}</option>`).join('')}</select>
+      <input id="adj-pt" type="number" inputmode="numeric" placeholder="pt（れい：10）">
+      <input id="adj-note" placeholder="りゆう（れい：おてつだい ボーナス）" style="grid-column:1/-1">
+      <button class="btn2" style="background:var(--good)" data-adj="1">＋ たす</button>
+      <button class="btn2" style="background:var(--bad)" data-adj="-1">− ひく</button>
+    </div>
+
+    <h2>💾 データ</h2>
+    <div class="card">
+      <div class="backup">
+        <button data-act="export">バックアップを ほぞん</button>
+        <label>バックアップから もどす<input type="file" accept="application/json" id="import" hidden></label>
+      </div>
+      <p class="hint">${sync.mode === 'shared' ? 'データは かぞく みんなで きょうゆう されます。' : 'データは この たんまつの ブラウザに ほぞんされます。'}</p>
+      <button class="danger" data-act="reset">ぜんぶ リセット</button>
+    </div>`;
+}
+$('#p-parent').addEventListener('change', e => {
+  const t = e.target;
+  if (t.dataset.set) {
+    const key = t.dataset.set;
+    const v = Math.max(key === 'cashStep' || key === 'gachaCost' ? 1 : 0, Math.round(Number(t.value) || 0));
+    t.value = v;
+    commit(st => { st.settings[key] = v; });
+    renderKids(); return;
+  }
+  const row = t.closest('[data-row]'), prow = t.closest('[data-prize]');
+  if (row && t.dataset.f) {
+    const id = row.dataset.row, f = t.dataset.f;
+    const v = f === 'pt' ? Math.max(0, Math.round(Number(t.value) || 0)) : t.value.trim();
+    if (v === '') return;
+    commit(st => { const c = st.chores.find(x => x.id === id); if (c) c[f] = v; });
+    return;
+  }
+  if (prow && t.dataset.f) {
+    const id = prow.dataset.prize, f = t.dataset.f, v = t.value.trim();
+    if (v === '') return;
+    commit(st => { const p = st.prizes.find(x => x.id === id); if (p) p[f] = v; });
+    return;
+  }
+  if (t.id === 'import' && t.files[0]) {
+    t.files[0].text().then(async txt => {
+      try {
+        const d = JSON.parse(txt);
+        if (!d.points || !d.log) throw 0;
+        if (!await confirmModal('📥', 'バックアップから もどす', 'いまの データは うわがき されます', 'もどす', true)) return;
+        const next = normalize(d);
+        commit(st => replaceAll(st, JSON.parse(JSON.stringify(next)))); render();
+      } catch { confirmModal('⚠️', 'よみこめませんでした', 'ファイルを たしかめてね', 'OK'); }
+    });
+  }
+});
+$('#p-parent').addEventListener('click', async e => {
+  const t = e.target;
+  if (t.closest('[data-act="add-chore"]')) { const c = { id:uid(), emoji:'⭐', name:'あたらしい おてつだい', pt:3 }; commit(st => { st.chores.push({ ...c }); }); renderParent(); return; }
+  if (t.closest('[data-act="add-prize"]')) { const p = { id:uid(), emoji:'🎁', name:'あたらしい けいひん', rarity:'N' }; commit(st => { st.prizes.push({ ...p }); }); renderParent(); return; }
+  const dc = t.closest('[data-del-chore]');
+  if (dc) { const id = dc.dataset.delChore; commit(st => { st.chores = st.chores.filter(x => x.id !== id); }); renderParent(); return; }
+  const dp = t.closest('[data-del-prize]');
+  if (dp) { const id = dp.dataset.delPrize; commit(st => { st.prizes = st.prizes.filter(x => x.id !== id); }); renderParent(); return; }
+  const adj = t.closest('[data-adj]');
+  if (adj) {
+    const pt = Math.abs(Math.round(Number($('#adj-pt').value) || 0)); if (!pt) return;
+    const kid = $('#adj-kid').value, sign = Number(adj.dataset.adj);
+    const note = $('#adj-note').value.trim() || 'ちょうせい';
+    commit(st => addLog(st, kid, 'adjust', `✏️ ${note}`, sign * pt));
+    render(); celebrate(`${sign > 0 ? '＋' : '−'}${pt}pt`, kidOf(kid).name, kidOf(kid).color, ['✏️']);
+    return;
+  }
+  if (t.closest('[data-act="export"]')) {
+    const d = new Date();
+    const filename = `otetsudai-${d.getFullYear()}${String(d.getMonth() + 1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}.json`;
+    const data = JSON.stringify(state, null, 1);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([data], { type:'application/json' }));
+    a.download = filename; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+    return;
+  }
+  if (t.closest('[data-act="reset"]')) {
+    if (!await confirmModal('⚠️', 'ぜんぶ リセット', 'ポイント・きろく・せっていが\nすべて きえます', 'リセット', true)) return;
+    const fresh = defaults();
+    commit(st => replaceAll(st, JSON.parse(JSON.stringify(fresh)))); render();
+  }
+});
+
+/* ---------- shared UI ---------- */
+function confirmModal(emoji, title, body, okLabel, danger = false) {
+  return new Promise(res => {
+    const sc = document.createElement('div');
+    sc.className = 'scrim';
+    sc.innerHTML = `<div class="modal" role="dialog" aria-modal="true"><div class="em">${esc(emoji)}</div><h3>${esc(title)}</h3><p>${esc(body)}</p>
+      <div class="acts"><button class="no">やめる</button><button class="yes ${danger ? 'bad' : ''}">${esc(okLabel)}</button></div></div>`;
+    const done = v => { sc.remove(); res(v); };
+    sc.addEventListener('click', e => { if (e.target === sc || e.target.closest('.no')) done(false); else if (e.target.closest('.yes')) done(true); });
+    document.body.appendChild(sc);
+    sc.querySelector('.yes').focus();
+  });
+}
+function celebrate(value, label, color, emojis) {
+  document.querySelectorAll('.toast').forEach(n => n.remove());
+  const t = document.createElement('div');
+  t.className = 'toast'; t.style.setProperty('--c', color);
+  t.innerHTML = `<div class="v">${esc(value)}</div><div class="l">${esc(label)}</div>`;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 1500);
+  burst(emojis, 12);
+}
+function burst(emojis, n) {
+  for (let i = 0; i < n; i++) {
+    const c = document.createElement('div');
+    c.className = 'confetti';
+    c.textContent = emojis[i % emojis.length];
+    const a = Math.random() * Math.PI * 2, r = 120 + Math.random() * 160;
+    c.style.cssText = `left:50%;top:30%;--x:${Math.cos(a) * r}px;--y:${Math.sin(a) * r}px;--r:${Math.random() * 360 - 180}deg`;
+    document.body.appendChild(c);
+    setTimeout(() => c.remove(), 1300);
+  }
+}
+function bump(kid) {
+  const el = document.querySelector(`.kid[data-kid="${kid}"]`);
+  if (el) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); }
+}
+
+document.querySelector('nav.tabs').addEventListener('click', e => {
+  const b = e.target.closest('[data-tab]'); if (!b) return;
+  ui.tab = b.dataset.tab; render();
+});
+
+function render() {
+  document.querySelectorAll('nav.tabs [data-tab]').forEach(b => b.setAttribute('aria-selected', b.dataset.tab === ui.tab));
+  for (const id of ['chore','reward','log','parent']) $('#p-' + id).hidden = id !== ui.tab;
+  renderKids();
+  ({ chore:renderChore, reward:renderReward, log:renderLog, parent:renderParent })[ui.tab]();
+  renderSync();
+}
+render();
+connect();
+</script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Only the family document whose long random id is written in index.html (FAMILY_ID).
+    // Everything else in the database stays closed.
+    match /families/{familyId} {
+      allow read, write: if familyId.size() >= 20;
+    }
+  }
+}
